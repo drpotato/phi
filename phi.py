@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 import os
 import sys
 
@@ -98,7 +100,7 @@ class Phi:
 
                     for directory in path:
                         new_cwd = new_cwd[directory]
-                    if new_cwd is not None and self.is_dir(new_cwd):
+                    if new_cwd is not None and not new_cwd.is_file():
                         self.cwd = new_cwd
                     else:
                         print('no such directory')
@@ -127,9 +129,6 @@ class Phi:
 
             elif command in ['exit', 'quit']:
                 exit()
-    @staticmethod
-    def is_dir(item):
-        return item.__class__.__name__ == 'Directory'
 
     def get_prompt(self):
         return '%s > ' % self.cwd
@@ -176,6 +175,9 @@ class File:
             return self.name
         return self.parent.get_full_path() + self.name + '-'
 
+    def is_file(self):
+        return True
+
 
 class Directory(File):
 
@@ -207,6 +209,9 @@ class Directory(File):
                 return file
 
         return None
+
+    def is_file(self):
+        return False
 
     def delete(self):
         for file in self.files:
