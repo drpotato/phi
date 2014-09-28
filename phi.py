@@ -15,9 +15,7 @@ class Phi:
 
         os.chdir('A2dir')
 
-        file_list = os.listdir('.')
-
-        self.root = self.build_directory_structure(file_list)
+        self.root = self.build_directory_structure(os.listdir('.'))
 
         self.cwd = self.root
 
@@ -78,74 +76,75 @@ class Phi:
             command = input_segments.pop(0)
             arguments = input_segments
 
-            # Get shell words from input
-            command_strings = self.parse_line(input_string)
+            try:
+                getattr(self, 'cmd_' + command)(arguments)
+            except AttributeError:
+                print('Command not found: ' + command)
 
-            if command == 'pwd':
-                print(self.cwd.get_full_path())
+    def cmd_pwd(self, arguments):
+        print(self.cwd.get_full_path())
 
-            elif command == 'cd':
-                if not arguments:
-                    self.cwd = self.root
-                elif arguments[0] == '..':
-                    self.cwd = self.cwd.parent
-                else:
-                    path = arguments[0].split('-')
+    def cmd_cd(self, arguments):
+        if not arguments:
+            self.cwd = self.root
+        elif arguments[0] == '..':
+            self.cwd = self.cwd.parent
+        else:
+            path = arguments[0].split('-')
 
-                    if path[0]:
-                        new_cwd = self.cwd
-                    else:
-                        path.pop(0)
-                        new_cwd = self.root
+            if path[0]:
+                new_cwd = self.cwd
+            else:
+                path.pop(0)
+                new_cwd = self.root
 
-                    for directory in path:
-                        new_cwd = new_cwd[directory]
-                    if new_cwd is not None and not new_cwd.is_file():
-                        self.cwd = new_cwd
-                    else:
-                        print('no such directory')
+            for directory in path:
+                new_cwd = new_cwd[directory]
+            if new_cwd is not None and not new_cwd.is_file():
+                self.cwd = new_cwd
+            else:
+                print('no such directory')
 
-            elif command == 'ls':
-                files = []
-                for file in self.cwd:
-                    if self.is_dir(file):
-                        file_name = 'd: '
-                    else:
-                        file_name = 'f: '
-                    file_name += str(file)
-                    files.append(file_name)
-                print(' '.join(files))
+    def cmd_rls(self, arguments):
+        print(os.system('ls -l'))
 
-            elif command == 'rls':
-                print(os.system('ls -l'))
+    def cmd_ls(self, arguments):
+        files = []
+        for file in sorted(self.cwd, key=str):
+            if file.is_file():
+                file_name = 'f: '
+            else:
+                file_name = 'd: '
+            file_name += str(file)
+            files.append(file_name)
+        print(' '.join(files))
 
-            elif command == 'delete':
-                if not arguments:
-                    print('requires arguments')
-                else:
-                    self.root.search(arguments[0]).delete()
+    def cmd_delete(self, arguments):
+        if not arguments:
+            print('requires arguments')
+        else:
+            self.cwd.search(arguments[0]).delete()
 
+    def cmd_dd(self, arguments):
+        if not arguments:
+            print('requires arguments')
+        else:
 
+            directory = self.cwd.search(arguments[0])
 
-            elif command in ['exit', 'quit']:
-                exit()
+            parent = directory.parent
+            parent.delete_directory(directory)
+
+    def cmd_tree(self, arguments, level=0):
+        self.cwd.tree(0)
+
+    def cmd_quit(self, arguments):
+        exit()
+
+    cmd_exit = cmd_quit
 
     def get_prompt(self):
         return '%s > ' % self.cwd
-
-    @staticmethod
-    def parse_line(line):
-        """
-            Breaks the line up into shell words.
-            :returns: Returns a list of
-            :rtype:
-            """
-
-        line_segments = line.split()
-
-        command = line_segments.pop(0)
-
-        return command, line_segments
 
 
 class File:
@@ -157,9 +156,12 @@ class File:
     def set_parent(self, parent):
         self.parent = parent
 
-
     def delete(self):
-        os.remove('%s-%s' % (self.get_full_path(), self.name))
+        os.remove(self.get_full_path())
+        self.parent.files.remove(self)
+
+    def recursive_delete(self):
+        os.remove(self.get_full_path())
 
     def search(self, item):
         if item == self.name:
@@ -172,11 +174,14 @@ class File:
 
     def get_full_path(self):
         if self.parent is None:
-            return self.name
-        return self.parent.get_full_path() + self.name + '-'
+            return ''
+        return self.parent.get_full_path() + '-' + self.name
 
     def is_file(self):
         return True
+
+    def tree(self, level):
+        print('    ' * (level - 1), str(self))
 
 
 class Directory(File):
@@ -193,7 +198,7 @@ class Directory(File):
 
     def __contains__(self, item):
 
-        if item.__class__.__name__ == 'str':
+        if type(item) is str:
             for file in self.files:
                 if str(file) == item:
                     return True
@@ -213,9 +218,13 @@ class Directory(File):
     def is_file(self):
         return False
 
-    def delete(self):
+    def recursive_delete(self):
         for file in self.files:
-            file.delete()
+            file.recursive_delete()
+
+    def delete_directory(self, directory):
+        directory.recursive_delete()
+        self.files.remove(directory)
 
     def search(self, item):
         if item == self.name:
@@ -231,6 +240,15 @@ class Directory(File):
         self.files.add(file)
         file.set_parent(self)
 
+    def tree(self, level):
+
+        name = self.get_full_path() if self.parent else '-'
+
+        print('    ' * level, name)
+        print('    ' * level, '=' * len(name))
+
+        for file in sorted(self.files, key=str):
+            file.tree(level + 1)
 
 if __name__ == '__main__':
     phi = Phi()
