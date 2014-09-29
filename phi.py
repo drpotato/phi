@@ -33,18 +33,14 @@ class Phi:
         # Infinite loop, woo!
         while True:
 
-            # Stop pycharm complaining.
-            input_string = None
-
             try:
-                input_string = input(self.get_prompt() if sys.stdin.isatty() else '')
+                input_string = input('ffs> ' if sys.stdin.isatty() else '')
             except EOFError:  # If we hit the end of a file or user types ctrl + d.
                 exit()
 
             # For the markers.
             if not sys.stdin.isatty():
-                print(self.get_prompt() + input_string)
-
+                print('ffs> ' + input_string)
 
             input_segments = input_string.split()
 
@@ -263,9 +259,6 @@ class Phi:
         exit()
 
     cmd_exit = cmd_quit
-
-    def get_prompt(self):
-        return 'ffs> '
 
 
 class File:
