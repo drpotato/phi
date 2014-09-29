@@ -39,11 +39,11 @@ class Phi:
                 file_name = path_list.pop()
                 file = File(file_name)
                 cwd = root
-                for dir in path_list:
-                    if dir in cwd:
-                        cwd = cwd[dir]
+                for directory in path_list:
+                    if directory in cwd:
+                        cwd = cwd[directory]
                     else:
-                        new_dir = Directory(dir)
+                        new_dir = Directory(directory)
                         new_dir.set_parent(cwd)
                         cwd.add_file(new_dir)
                         cwd = new_dir
@@ -82,7 +82,7 @@ class Phi:
                 print('Command not found: ' + command)
 
     def cmd_pwd(self, arguments):
-        print(self.cwd.get_full_path())
+        print(self.cwd.get_full_path() if self.cwd.parent else '-')
 
     def cmd_cd(self, arguments):
         if not arguments:
@@ -106,18 +106,28 @@ class Phi:
                 print('no such directory')
 
     def cmd_rls(self, arguments):
-        print(os.system('ls -l'))
+        os.system('ls -l')
 
     def cmd_ls(self, arguments):
+        path = arguments[0].split('-') if arguments else arguments
+
+        cwd = self.root if path and not path[0] else self.cwd
+
+        for directory in path:
+            if directory in cwd:
+                cwd = cwd[directory]
+            else:
+                print('No such directory:', path[-1])
+                return
         files = []
-        for file in sorted(self.cwd, key=str):
+        for file in sorted(cwd, key=str):
             if file.is_file():
                 file_name = 'f: '
             else:
                 file_name = 'd: '
             file_name += str(file)
             files.append(file_name)
-        print(' '.join(files))
+        print(' '.join(files)) if files else print(end='')
 
     def cmd_delete(self, arguments):
         if not arguments:
@@ -135,8 +145,68 @@ class Phi:
             parent = directory.parent
             parent.delete_directory(directory)
 
-    def cmd_tree(self, arguments, level=0):
-        self.cwd.tree(0)
+    def cmd_tree(self, arguments):
+
+        path = arguments[0].split('-') if arguments else arguments
+
+        cwd = self.cwd if path and path[0] else self.root
+
+        for directory in path:
+            if directory in cwd:
+                cwd = cwd[directory]
+            else:
+                print('No such directory:', path[-1])
+                return
+        cwd.tree(0)
+
+    def cmd_clear(self, arguments):
+        self.cwd = self.root
+        self.cwd.recursive_delete()
+        self.cwd.files = set()
+
+    def cmd_create(self, arguments):
+
+        if not arguments:
+            print('requires arguments')
+        else:
+            path = arguments[0].split('-')
+            file_name = path.pop()
+            if path[0]:
+                self.cwd.create(path, file_name)
+            else:
+                self.root.create(path[1:], file_name)
+
+    def cmd_add(self, arguments):
+
+        if len(arguments) != 2:
+            print('requires 2 arguments')
+        else:
+            path = arguments[0].split('-')
+
+            cwd = self.cwd if path and path[0] else self.root
+
+            file = cwd.search(path[-1])
+
+            if file:
+                file.write(arguments[1])
+            else:
+                print('No such file or directory:', path[-1])
+
+    def cmd_cat(self, arguments):
+        if not arguments:
+            print('requires arguments')
+        else:
+            path = arguments[0].split('-')
+
+            cwd = self.cwd if path and path[0] else self.root
+
+            file = cwd.search(path[-1])
+
+            if file:
+                print(file.read())
+            else:
+                print('No such file or directory:', path[-1])
+
 
     def cmd_quit(self, arguments):
         exit()
@@ -181,7 +251,18 @@ class File:
         return True
 
     def tree(self, level):
-        print('    ' * (level - 1), str(self))
+        print('    ' * (level - 1), str(self), sep='')
+
+    def create(self, path, file_name):
+        pass
+
+    def write(self, text):
+        with open(self.get_full_path(), 'a') as f:
+            f.write(text)
+
+    def read(self):
+        with open(self.get_full_path(), 'r') as f:
+            return f.read()
 
 
 class Directory(File):
@@ -199,7 +280,7 @@ class Directory(File):
     def __contains__(self, item):
 
         if type(item) is str:
-            for file in self.files:
+            for file in self:
                 if str(file) == item:
                     return True
             return False
@@ -207,8 +288,8 @@ class Directory(File):
         return item in self.files
 
     def __getitem__(self, item):
-        for file in self.files:
-            if file.__class__.__name__ in ['File', 'Directory'] and file.name == item:
+        for file in self:
+            if type(file) in [File, Directory] and file.name == item:
                 return file
             elif file == item:
                 return file
@@ -219,7 +300,7 @@ class Directory(File):
         return False
 
     def recursive_delete(self):
-        for file in self.files:
+        for file in self:
             file.recursive_delete()
 
     def delete_directory(self, directory):
@@ -230,7 +311,7 @@ class Directory(File):
         if item == self.name:
             return self
         else:
-            for file in self.files:
+            for file in self:
                 result = file.search(item)
                 if result is not None:
                     return result
@@ -242,13 +323,27 @@ class Directory(File):
 
     def tree(self, level):
 
-        name = self.get_full_path() if self.parent else '-'
+        name = self.get_full_path() + '-' if self.parent else '-'
 
-        print('    ' * level, name)
-        print('    ' * level, '=' * len(name))
+        print('    ' * level, name, sep='')
+        print('    ' * level, '=' * len(name), sep='')
 
         for file in sorted(self.files, key=str):
             file.tree(level + 1)
+
+    def create(self, path, file_name):
+        if path[0] in self:
+            self[path[0]].create(path[1:])
+        else:
+            directory = Directory(path.pop(0))
+            directory.parent = self
+            self.add_file(directory)
+            if path:
+                directory.create(path, file_name)
+            else:
+                file = File(file_name)
+                directory.add_file(file)
+                open(directory.get_full_path() + '-' + file_name, 'w')
 
 if __name__ == '__main__':
     phi = Phi()
