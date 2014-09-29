@@ -63,13 +63,14 @@ class Phi:
             input_string = None
 
             try:
-                input_string = input(self.get_prompt())
+                input_string = input(self.get_prompt() if sys.stdin.isatty() else '')
             except EOFError:  # If we hit the end of a file or user types ctrl + d.
                 exit()
 
             # For the markers.
             if not sys.stdin.isatty():
                 print(self.get_prompt() + input_string)
+
 
             input_segments = input_string.split()
 
@@ -82,15 +83,17 @@ class Phi:
                 print('Command not found: ' + command)
 
     def cmd_pwd(self, arguments):
-        print(self.cwd.get_full_path() if self.cwd.parent else '-')
+        print(self.cwd.get_full_path(), '-', sep='')
 
     def cmd_cd(self, arguments):
         if not arguments:
             self.cwd = self.root
-        elif arguments[0] == '..':
+        elif arguments[0] == '..' and self.cwd.parent is not None:
             self.cwd = self.cwd.parent
         else:
             path = arguments[0].split('-')
+            if len(path) > 1 and not path[-1]:
+                path.pop()
 
             if path[0]:
                 new_cwd = self.cwd
@@ -127,37 +130,79 @@ class Phi:
                 file_name = 'd: '
             file_name += str(file)
             files.append(file_name)
-        print(' '.join(files)) if files else print(end='')
+        print('\n'.join(files)) if files else print(end='')
 
     def cmd_delete(self, arguments):
         if not arguments:
             print('requires arguments')
         else:
-            self.cwd.search(arguments[0]).delete()
+
+            path = arguments[0].split('-')
+            if len(path) > 1 and not path[-1]:
+                path.pop()
+
+            if path[0]:
+                cwd = self.cwd
+            else:
+                path.pop(0)
+                cwd = self.root
+
+            file = path.pop()
+
+            cwd.traverse(path, file).delete()
 
     def cmd_dd(self, arguments):
         if not arguments:
             print('requires arguments')
         else:
 
-            directory = self.cwd.search(arguments[0])
+            path = arguments[0].split('-') if arguments else arguments
 
-            parent = directory.parent
-            parent.delete_directory(directory)
+            if len(path) > 1 and not path[-1]:
+                path.pop()
+
+            if path[0]:
+                cwd = self.cwd
+
+            else:
+                path.pop(0)
+                cwd = self.root
+
+            item = path.pop()
+
+            directory = cwd.traverse(path, item)
+
+            if directory is not None:
+                directory.parent.delete_directory(directory)
+            else:
+                print('No such directory:', path[-1])
 
     def cmd_tree(self, arguments):
 
         path = arguments[0].split('-') if arguments else arguments
 
-        cwd = self.cwd if path and path[0] else self.root
+        if len(path) > 1 and not path[-1]:
+            path.pop()
 
-        for directory in path:
-            if directory in cwd:
-                cwd = cwd[directory]
-            else:
-                print('No such directory:', path[-1])
-                return
-        cwd.tree(0)
+        if not path:
+            self.cwd.tree(0)
+            return
+
+        if path[0]:
+            cwd = self.cwd
+
+        else:
+            path.pop(0)
+            cwd = self.root
+
+        item = path.pop()
+
+        directory = cwd.traverse(path, item)
+
+        if directory is not None:
+            directory.tree(0)
+        else:
+            print('No such directory:', path[-1])
 
     def cmd_clear(self, arguments):
         self.cwd = self.root
@@ -171,42 +216,74 @@ class Phi:
         else:
             path = arguments[0].split('-')
             file_name = path.pop()
-            if path[0]:
+            if path and path[0]:
                 self.cwd.create(path, file_name)
             else:
                 self.root.create(path[1:], file_name)
 
     def cmd_add(self, arguments):
 
-        if len(arguments) != 2:
+        if len(arguments) < 2:
             print('requires 2 arguments')
         else:
             path = arguments[0].split('-')
 
-            cwd = self.cwd if path and path[0] else self.root
+            if len(path) > 1 and not path[-1]:
+                path.pop()
 
-            file = cwd.search(path[-1])
+            if not path:
+                self.cwd.tree(0)
+                return
+
+            if path[0]:
+                cwd = self.cwd
+
+            else:
+                path.pop(0)
+                cwd = self.root
+
+            item = path.pop()
+
+            file = cwd.traverse(path, item)
+
+            text = ' '.join(arguments[1:])
 
             if file:
-                file.write(arguments[1])
+                file.write(text)
             else:
-                print('No such file or directory:', path[-1])
+                print('No such file:', path[-1])
 
     def cmd_cat(self, arguments):
         if not arguments:
             print('requires arguments')
         else:
+
             path = arguments[0].split('-')
 
-            cwd = self.cwd if path and path[0] else self.root
+            if len(path) > 1 and not path[-1]:
+                path.pop()
 
-            file = cwd.search(path[-1])
+            if not path:
+                self.cwd.tree(0)
+                return
+
+            if path[0]:
+                cwd = self.cwd
+
+            else:
+                path.pop(0)
+                cwd = self.root
+
+            item = path.pop()
+
+            file = cwd.traverse(path, item)
 
             if file:
-                print(file.read())
+                text = file.read()
+                if text:
+                    print(text)
             else:
-                print('No such file or directory:', path[-1])
-
+                print('No such file:', path[-1])
 
     def cmd_quit(self, arguments):
         exit()
@@ -214,7 +291,7 @@ class Phi:
     cmd_exit = cmd_quit
 
     def get_prompt(self):
-        return '%s > ' % self.cwd
+        return 'ffs> '
 
 
 class File:
@@ -317,6 +394,16 @@ class Directory(File):
                     return result
             return None
 
+    def traverse(self, path, item):
+        if item == self.name:
+            return self
+        else:
+            if path and path[0] in self:
+                return self[path.pop(0)].traverse(path, item)
+            elif item in self:
+                return self[item]
+        return None
+
     def add_file(self, file):
         self.files.add(file)
         file.set_parent(self)
@@ -332,18 +419,18 @@ class Directory(File):
             file.tree(level + 1)
 
     def create(self, path, file_name):
-        if path[0] in self:
-            self[path[0]].create(path[1:])
+        if path and path[0] in self:
+            self[path[0]].create(path[1:], file_name)
         else:
-            directory = Directory(path.pop(0))
-            directory.parent = self
-            self.add_file(directory)
             if path:
+                directory = Directory(path.pop(0))
+                directory.parent = self
+                self.add_file(directory)
                 directory.create(path, file_name)
             else:
                 file = File(file_name)
-                directory.add_file(file)
-                open(directory.get_full_path() + '-' + file_name, 'w')
+                self.add_file(file)
+                open(self.get_full_path() + '-' + file_name, 'w')
 
 if __name__ == '__main__':
     phi = Phi()
