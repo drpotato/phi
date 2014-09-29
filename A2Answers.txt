@@ -1,0 +1,15 @@
+Name: Chris Morgan
+UPI: cmor149
+
+1.
+    255
+
+2.
+    Flat filesystems are excellent for drives with a small amount of storage capability as there is little overhead storing metadata about hierarchy.
+
+3.
+    It becomes difficult to find files in a flat filesystem if the number of files stored becomes too large.
+
+4.
+    Use of a b-tree can increase the speed of searching through the file names to log(n) runtime, however this comes at
+    the cost of storing the filesystem in memory.
