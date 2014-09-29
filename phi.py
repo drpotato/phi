@@ -15,41 +15,15 @@ class Phi:
 
         os.chdir('A2dir')
 
-        self.root = self.build_directory_structure(os.listdir('.'))
+        self.root = Directory('-')
+
+        for file in os.listdir('.'):
+            path = file.split('-')[1:]
+            file_name = path.pop()
+
+            self.root.create(path, file_name)
 
         self.cwd = self.root
-
-    @staticmethod
-    def build_directory_structure(file_list):
-
-        dir_levels = dict()
-        root = Directory('-')
-
-        for file in file_list:
-            level = file.count('-')
-
-            if level in dir_levels:
-                dir_levels[level].add(file)
-            else:
-                dir_levels[level] = {file}
-
-        for files in list(dir_levels.values())[::-1]:
-            for file_path in files:
-                path_list = file_path.split('-')[1:]
-                file_name = path_list.pop()
-                file = File(file_name)
-                cwd = root
-                for directory in path_list:
-                    if directory in cwd:
-                        cwd = cwd[directory]
-                    else:
-                        new_dir = Directory(directory)
-                        new_dir.set_parent(cwd)
-                        cwd.add_file(new_dir)
-                        cwd = new_dir
-                cwd.add_file(file)
-
-        return root
 
     def run(self):
         """
@@ -310,12 +284,6 @@ class File:
     def recursive_delete(self):
         os.remove(self.get_full_path())
 
-    def search(self, item):
-        if item == self.name:
-            return self
-        else:
-            return None
-
     def __str__(self):
         return self.name
 
@@ -383,16 +351,6 @@ class Directory(File):
     def delete_directory(self, directory):
         directory.recursive_delete()
         self.files.remove(directory)
-
-    def search(self, item):
-        if item == self.name:
-            return self
-        else:
-            for file in self:
-                result = file.search(item)
-                if result is not None:
-                    return result
-            return None
 
     def traverse(self, path, item):
         if item == self.name:
