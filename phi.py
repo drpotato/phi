@@ -3,7 +3,7 @@
 import os
 import sys
 
-__author__ = 'Chris Morgan'
+__author__ = 'Chris Morgan - cmor149'
 
 
 class Phi:
